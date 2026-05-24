@@ -23,9 +23,7 @@ RUN apk add --no-cache ca-certificates
 COPY --from=migrate /migrate /usr/local/bin/migrate
 COPY --from=builder /app/app .
 COPY backend/migrations /migrations
-COPY backend/start.sh .
-RUN chmod +x start.sh
 
 EXPOSE 8080
 
-CMD ["./start.sh"]
+CMD ["sh", "-c", "migrate -path /migrations -database \"${DB_URL}\" up && exec ./app"]

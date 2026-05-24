@@ -10,7 +10,6 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+RUN echo $'#!/bin/sh\nsed -i "s/listen 80;/listen ${PORT:-80};/" /etc/nginx/conf.d/default.conf\nexec nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
 EXPOSE 80
 CMD ["/start.sh"]
