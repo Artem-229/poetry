@@ -8,7 +8,8 @@ import (
 
 type CommentRepository interface {
 	Create(ctx context.Context, c *domain.Comment) error
-	Delete(ctx context.Context, id int64, poemID int64) error
+	Delete(ctx context.Context, id int64) error
+	ListByPoem(ctx context.Context, poemID int64) ([]domain.Comment, error)
 }
 
 type CommentUsecase struct {
@@ -23,6 +24,10 @@ func (u *CommentUsecase) Create(ctx context.Context, c *domain.Comment) error {
 	return u.repo.Create(ctx, c)
 }
 
-func (u *CommentUsecase) Delete(ctx context.Context, id int64, poemID int64) error {
-	return u.repo.Delete(ctx, id, poemID)
+func (u *CommentUsecase) Delete(ctx context.Context, id int64) error {
+	return u.repo.Delete(ctx, id)
+}
+
+func (u *CommentUsecase) ListByPoem(ctx context.Context, poemID int64) ([]domain.Comment, error) {
+	return u.repo.ListByPoem(ctx, poemID)
 }

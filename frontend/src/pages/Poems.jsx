@@ -1,37 +1,69 @@
 import { useEffect, useState } from "react";
 import { getPoems } from "../api/poems";
 import PoemCard from "../components/PoemCard";
-import Modal from "../components/Modal";
+import PoemModal from "../components/PoemModal";
 
 export default function Poems() {
     const [poems, setPoems] = useState([]);
+    const [sort, setSort] = useState("popular");
     const [selected, setSelected] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        load("popular");
+        load(sort);
     }, []);
 
-    const load = async (sort) => {
-        const res = await getPoems(sort);
-        setPoems(res.data);
+    const load = (s) => {
+        setLoading(true);
+        setSort(s);
+        getPoems(s)
+            .then((res) => setPoems(res.data))
+            .catch(() => {})
+            .finally(() => setLoading(false));
     };
 
     return (
         <div className="container">
-            <h2>Poems</h2>
+            <h1 className="page-title">Стихи</h1>
+            <p className="page-subtitle">Лирика, написанная с душой</p>
 
-            <button onClick={() => load("popular")}>Popular</button>
-            <button onClick={() => load("")}>New</button>
+            <div className="filters">
+                <button
+                    className={`btn ${sort === "popular" ? "active" : ""}`}
+                    onClick={() => load("popular")}
+                >
+                    Популярные
+                </button>
+                <button
+                    className={`btn ${sort === "" ? "active" : ""}`}
+                    onClick={() => load("")}
+                >
+                    Новые
+                </button>
+            </div>
 
-            {poems.map((p) => (
-                <PoemCard key={p.id} poem={p} onClick={() => setSelected(p)} />
-            ))}
+            {loading ? (
+                <p className="loading">Загрузка...</p>
+            ) : poems.length === 0 ? (
+                <p className="empty">Стихов пока нет</p>
+            ) : (
+                poems.map((p) => (
+                    <PoemCard key={p.id} poem={p} onClick={() => setSelected(p)} />
+                ))
+            )}
 
             {selected && (
-                <Modal onClose={() => setSelected(null)}>
-                    <h2>{selected.title}</h2>
-                    <p>{selected.content}</p>
-                </Modal>
+                <PoemModal
+                    poem={selected}
+                    onClose={() => setSelected(null)}
+                    onLikeChange={(id, delta) =>
+                        setPoems((prev) =>
+                            prev.map((p) =>
+                                p.id === id ? { ...p, likes_count: p.likes_count + delta } : p
+                            )
+                        )
+                    }
+                />
             )}
         </div>
     );

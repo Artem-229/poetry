@@ -23,17 +23,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := h.uc.Register(c.Request.Context(), req.Email, req.Password)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	if err := h.uc.Register(c.Request.Context(), req.Email, req.Password); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.Status(201)
+	c.Status(http.StatusCreated)
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -43,23 +42,27 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	token, err := h.uc.Login(c.Request.Context(), req.Email, req.Password)
+	user, token, err := h.uc.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
-		c.JSON(401, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(200, gin.H{"token": token})
+	c.JSON(http.StatusOK, gin.H{
+		"token":   token,
+		"user_id": user.ID,
+		"role":    string(user.Role),
+		"email":   user.Email,
+	})
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID := c.GetInt64("user_id")
-
 	c.JSON(http.StatusOK, gin.H{
-		"user_id": userID,
+		"user_id": c.GetInt64("user_id"),
+		"role":    c.GetString("role"),
 	})
 }

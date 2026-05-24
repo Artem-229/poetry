@@ -1,0 +1,5 @@
+# Исключаем из backend build context (context = корень)
+frontend/
+.git
+.env
+*.md
