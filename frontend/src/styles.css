@@ -56,6 +56,16 @@ body {
 
 .nav a:hover { color: var(--accent); }
 
+.nav-register {
+    color: var(--accent) !important;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+.nav-register:hover { opacity: 0.75; color: var(--accent) !important; }
+
 .nav-spacer { flex: 1; }
 
 /* ─── Container ──────────────────────────────── */

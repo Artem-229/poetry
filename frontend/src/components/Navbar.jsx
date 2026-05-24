@@ -26,7 +26,7 @@ export default function Navbar() {
             ) : (
                 <>
                     <Link to="/login">Войти</Link>
-                    <Link to="/register" className="btn btn-primary btn-sm">Регистрация</Link>
+                    <Link to="/register" className="nav-register">Регистрация</Link>
                 </>
             )}
         </nav>
