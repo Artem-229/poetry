@@ -18,7 +18,7 @@ FROM alpine:3.19
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && mkdir -p /app/uploads
 
 COPY --from=migrate /migrate /usr/local/bin/migrate
 COPY --from=builder /app/app .

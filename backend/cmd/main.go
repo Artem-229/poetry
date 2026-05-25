@@ -34,6 +34,7 @@ func main() {
 	interactionRepo := postgres.NewInteractionRepo(dbpool)
 	collectionRepo := postgres.NewCollectionRepo(dbpool)
 	siteContentRepo := postgres.NewSiteContentRepo(dbpool)
+	galleryRepo := postgres.NewGalleryRepo(dbpool)
 
 	authUC := usecase.NewAuthUsecase(userRepo, jwtSvc, pwdSvc)
 	poemUC := usecase.NewPoemUsecase(poemRepo)
@@ -41,8 +42,9 @@ func main() {
 	commentUC := usecase.NewCommentUsecase(commentRepo)
 	collectionUC := usecase.NewCollectionUsecase(collectionRepo)
 	siteContentUC := usecase.NewSiteContentUsecase(siteContentRepo)
+	galleryUC := usecase.NewGalleryUsecase(galleryRepo)
 
-	r := http.NewRouter(authUC, poemUC, interactionUC, commentUC, collectionUC, siteContentUC, jwtSvc)
+	r := http.NewRouter(authUC, poemUC, interactionUC, commentUC, collectionUC, siteContentUC, galleryUC, jwtSvc)
 
 	log.Println("server started on :" + cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {

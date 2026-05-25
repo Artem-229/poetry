@@ -12,10 +12,11 @@ export default function Navbar() {
 
     return (
         <nav className="nav">
-            <Link className="nav-brand" to="/">Поэзия</Link>
+            <Link className="nav-brand" to="/">Сергей Низамов</Link>
             <Link to="/">Главная</Link>
             <Link to="/poems">Стихи</Link>
             <Link to="/collections">Сборники</Link>
+            <Link to="/gallery">Галерея</Link>
             <span className="nav-spacer" />
             {token ? (
                 <>

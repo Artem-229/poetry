@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { getPoems, createPoem, updatePoem, deletePoem } from "../api/poems";
-import { getCollections, createCollection, deleteCollection } from "../api/collections";
+import { getCollections, getCollection, createCollection, deleteCollection, addPoemToCollection, removePoemFromCollection } from "../api/collections";
 import { getSiteContent, updateSiteContent } from "../api/siteContent";
+import { getGallery, createGalleryItem, updateGalleryItem, deleteGalleryItem, uploadFile } from "../api/gallery";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 export default function Admin() {
     const { user, token } = useAuthStore();
@@ -28,6 +31,18 @@ export default function Admin() {
     const [collTitle, setCollTitle] = useState("");
     const [collDesc, setCollDesc] = useState("");
 
+    const [managingCollection, setManagingCollection] = useState(null);
+    const [collectionPoems, setCollectionPoems] = useState([]);
+    const [togglingPoem, setTogglingPoem] = useState(null);
+    const [showNewPoemInColl, setShowNewPoemInColl] = useState(false);
+    const [collPoemTitle, setCollPoemTitle] = useState("");
+    const [collPoemContent, setCollPoemContent] = useState("");
+    const [collPoemGenre, setCollPoemGenre] = useState("");
+    const [collPoemWrittenAt, setCollPoemWrittenAt] = useState("");
+    const [collPoemPublishedAt, setCollPoemPublishedAt] = useState("");
+    const [collPoemSaving, setCollPoemSaving] = useState(false);
+    const [collPoemError, setCollPoemError] = useState("");
+
     const [siteContent, setSiteContent] = useState({
         hero_name: "",
         hero_tagline: "",
@@ -40,6 +55,15 @@ export default function Admin() {
     });
     const [siteSaving, setSiteSaving] = useState(false);
     const [siteSaved, setSiteSaved] = useState(false);
+    const [heroUploading, setHeroUploading] = useState(false);
+
+    const [galleryItems, setGalleryItems] = useState([]);
+    const [galleryCaption, setGalleryCaption] = useState("");
+    const [gallerySortOrder, setGallerySortOrder] = useState(0);
+    const [galleryFile, setGalleryFile] = useState(null);
+    const [galleryUploading, setGalleryUploading] = useState(false);
+    const [editGalleryItem, setEditGalleryItem] = useState(null);
+    const galleryFileRef = useRef(null);
 
     useEffect(() => {
         if (!token || user?.role !== "ADMIN") {
@@ -48,6 +72,7 @@ export default function Admin() {
         }
         loadPoems();
         loadCollections();
+        loadGallery();
         getSiteContent().then((r) => setSiteContent((prev) => ({ ...prev, ...r.data }))).catch(() => {});
     }, [token]);
 
@@ -56,6 +81,9 @@ export default function Admin() {
 
     const loadCollections = () =>
         getCollections().then((r) => setCollections(r.data)).catch(() => {});
+
+    const loadGallery = () =>
+        getGallery().then((r) => setGalleryItems(r.data)).catch(() => {});
 
     const toLocal = (iso) => iso ? new Date(iso).toISOString().slice(0, 16) : "";
 
@@ -115,14 +143,80 @@ export default function Admin() {
         } catch {}
     };
 
+    const openManage = async (col) => {
+        setManagingCollection(col);
+        setShowCollForm(false);
+        setShowNewPoemInColl(false);
+        const res = await getCollection(col.id);
+        setCollectionPoems(res.data.poems || []);
+    };
+
+    const closeManage = () => {
+        setManagingCollection(null);
+        setShowNewPoemInColl(false);
+        setCollPoemTitle("");
+        setCollPoemContent("");
+        setCollPoemGenre("");
+        setCollPoemWrittenAt("");
+        setCollPoemPublishedAt("");
+        setCollPoemError("");
+    };
+
+    const togglePoemInCollection = async (poemId) => {
+        const inCollection = collectionPoems.some((p) => p.id === poemId);
+        setTogglingPoem(poemId);
+        try {
+            if (inCollection) {
+                await removePoemFromCollection(managingCollection.id, poemId);
+                setCollectionPoems((prev) => prev.filter((p) => p.id !== poemId));
+            } else {
+                await addPoemToCollection(managingCollection.id, poemId);
+                const added = poems.find((p) => p.id === poemId);
+                if (added) setCollectionPoems((prev) => [...prev, added]);
+            }
+        } catch {}
+        setTogglingPoem(null);
+    };
+
+    const saveCollectionPoem = async (e) => {
+        e.preventDefault();
+        setCollPoemError("");
+        setCollPoemSaving(true);
+        const data = {
+            title: collPoemTitle,
+            content: collPoemContent,
+            genre: collPoemGenre.trim() || null,
+            written_at: collPoemWrittenAt ? new Date(collPoemWrittenAt).toISOString() : null,
+            published_at: collPoemPublishedAt ? new Date(collPoemPublishedAt).toISOString() : null,
+        };
+        try {
+            const res = await createPoem(data);
+            const newPoem = res.data;
+            await addPoemToCollection(managingCollection.id, newPoem.id);
+            setCollectionPoems((prev) => [...prev, newPoem]);
+            await loadPoems();
+            setCollPoemTitle("");
+            setCollPoemContent("");
+            setCollPoemGenre("");
+            setCollPoemWrittenAt("");
+            setCollPoemPublishedAt(toLocal(new Date().toISOString()));
+            setShowNewPoemInColl(false);
+        } catch (err) {
+            setCollPoemError(err.response?.data?.error || "Ошибка сохранения");
+        } finally {
+            setCollPoemSaving(false);
+        }
+    };
+
     const saveCollection = async (e) => {
         e.preventDefault();
         try {
-            await createCollection({ title: collTitle, description: collDesc });
-            setShowCollForm(false);
+            const res = await createCollection({ title: collTitle, description: collDesc });
             setCollTitle("");
             setCollDesc("");
             await loadCollections();
+            setShowCollForm(false);
+            await openManage(res.data);
         } catch {}
     };
 
@@ -132,6 +226,58 @@ export default function Admin() {
             await deleteCollection(id);
             setCollections((c) => c.filter((col) => col.id !== id));
         } catch {}
+    };
+
+    const uploadHeroPhoto = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setHeroUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append("image", file);
+            const res = await uploadFile(fd);
+            await updateSiteContent({ hero_photo: res.data.url });
+            setSiteContent((p) => ({ ...p, hero_photo: res.data.url }));
+        } catch {}
+        finally { setHeroUploading(false); }
+    };
+
+    const saveGalleryItem = async (e) => {
+        e.preventDefault();
+        if (!editGalleryItem && !galleryFile) return;
+        setGalleryUploading(true);
+        try {
+            if (editGalleryItem) {
+                await updateGalleryItem(editGalleryItem.id, { caption: galleryCaption, sort_order: gallerySortOrder });
+                setEditGalleryItem(null);
+            } else {
+                const fd = new FormData();
+                fd.append("image", galleryFile);
+                fd.append("caption", galleryCaption);
+                fd.append("sort_order", String(gallerySortOrder));
+                await createGalleryItem(fd);
+            }
+            setGalleryCaption("");
+            setGallerySortOrder(0);
+            setGalleryFile(null);
+            if (galleryFileRef.current) galleryFileRef.current.value = "";
+            await loadGallery();
+        } catch {}
+        finally { setGalleryUploading(false); }
+    };
+
+    const handleDeleteGallery = async (id) => {
+        if (!window.confirm("Удалить фото?")) return;
+        try {
+            await deleteGalleryItem(id);
+            setGalleryItems((items) => items.filter((i) => i.id !== id));
+        } catch {}
+    };
+
+    const openEditGallery = (item) => {
+        setEditGalleryItem(item);
+        setGalleryCaption(item.caption);
+        setGallerySortOrder(item.sort_order);
     };
 
     const saveSiteContent = async (e) => {
@@ -171,6 +317,12 @@ export default function Admin() {
                     onClick={() => setTab("home")}
                 >
                     Главная страница
+                </button>
+                <button
+                    className={`admin-tab ${tab === "gallery" ? "active" : ""}`}
+                    onClick={() => setTab("gallery")}
+                >
+                    Галерея
                 </button>
             </div>
 
@@ -285,7 +437,25 @@ export default function Admin() {
                     <h3 style={{ fontFamily: "Georgia, serif", fontWeight: "normal", marginBottom: "1.25rem" }}>
                         Редактирование главной страницы
                     </h3>
-                    {siteSaved && <div style={{ color: "green", marginBottom: "1rem" }}>Сохранено</div>}
+                    {siteSaved && <div className="success-msg">Сохранено</div>}
+                    <div className="field" style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: "1px solid var(--border)" }}>
+                        <label>Фото на главной странице</label>
+                        {siteContent.hero_photo && (
+                            <img
+                                src={API_URL + siteContent.hero_photo}
+                                alt="Текущее фото"
+                                style={{ display: "block", width: 120, height: 150, objectFit: "cover", borderRadius: "var(--radius)", marginBottom: "0.75rem", border: "1px solid var(--border)" }}
+                            />
+                        )}
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={uploadHeroPhoto}
+                            disabled={heroUploading}
+                            style={{ fontSize: "0.9rem" }}
+                        />
+                        {heroUploading && <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.4rem" }}>Загружаем...</p>}
+                    </div>
                     <form onSubmit={saveSiteContent}>
                         <div className="field">
                             <label>Имя автора</label>
@@ -362,58 +532,266 @@ export default function Admin() {
 
             {tab === "collections" && (
                 <>
-                    {!showCollForm && (
-                        <div style={{ marginBottom: "1.5rem" }}>
-                            <button className="btn btn-primary" onClick={() => setShowCollForm(true)}>
-                                + Создать сборник
+                    {managingCollection ? (
+                        <div>
+                            <button className="btn" onClick={closeManage} style={{ marginBottom: "1.5rem" }}>
+                                ← К списку сборников
                             </button>
-                        </div>
-                    )}
+                            <h2 style={{ fontFamily: "Georgia, serif", fontWeight: "normal", marginBottom: "0.25rem" }}>
+                                {managingCollection.title}
+                            </h2>
+                            {managingCollection.description && (
+                                <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem" }}>{managingCollection.description}</p>
+                            )}
 
-                    {showCollForm && (
-                        <div className="card" style={{ cursor: "default", marginBottom: "2rem" }}>
-                            <h3 style={{ fontFamily: "Georgia, serif", fontWeight: "normal", marginBottom: "1.25rem" }}>
-                                Новый сборник
-                            </h3>
-                            <form onSubmit={saveCollection}>
-                                <div className="field">
-                                    <label>Название</label>
-                                    <input
-                                        value={collTitle}
-                                        onChange={(e) => setCollTitle(e.target.value)}
-                                        placeholder="Название сборника"
-                                        required
-                                    />
+                            <div className="card" style={{ cursor: "default", marginBottom: "1.5rem" }}>
+                                <h3 style={{ fontFamily: "Georgia, serif", fontWeight: "normal", marginBottom: "1rem" }}>
+                                    Стихи в сборнике
+                                </h3>
+                                {poems.length === 0 ? (
+                                    <p className="empty">Стихов пока нет</p>
+                                ) : (
+                                    poems.map((poem) => {
+                                        const inColl = collectionPoems.some((p) => p.id === poem.id);
+                                        const toggling = togglingPoem === poem.id;
+                                        return (
+                                            <div
+                                                key={poem.id}
+                                                className="admin-poem-row"
+                                                style={{ cursor: toggling ? "wait" : "pointer" }}
+                                                onClick={() => !toggling && togglePoemInCollection(poem.id)}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={inColl}
+                                                    readOnly
+                                                    style={{ marginRight: "0.75rem", flexShrink: 0 }}
+                                                />
+                                                <span className="admin-poem-title">{poem.title}</span>
+                                                {toggling && (
+                                                    <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>...</span>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            {!showNewPoemInColl ? (
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={() => {
+                                        setCollPoemPublishedAt(toLocal(new Date().toISOString()));
+                                        setShowNewPoemInColl(true);
+                                    }}
+                                >
+                                    + Создать новое стихотворение для сборника
+                                </button>
+                            ) : (
+                                <div className="card" style={{ cursor: "default" }}>
+                                    <h3 style={{ fontFamily: "Georgia, serif", fontWeight: "normal", marginBottom: "1.25rem" }}>
+                                        Новое стихотворение
+                                    </h3>
+                                    {collPoemError && <div className="error-msg">{collPoemError}</div>}
+                                    <form onSubmit={saveCollectionPoem}>
+                                        <div className="field">
+                                            <label>Название</label>
+                                            <input
+                                                value={collPoemTitle}
+                                                onChange={(e) => setCollPoemTitle(e.target.value)}
+                                                placeholder="Название стихотворения"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="field">
+                                            <label>Текст стихотворения</label>
+                                            <textarea
+                                                className="poem-textarea"
+                                                value={collPoemContent}
+                                                onChange={(e) => setCollPoemContent(e.target.value)}
+                                                placeholder="Введите текст..."
+                                                required
+                                            />
+                                        </div>
+                                        <div className="field">
+                                            <label>Рубрика / жанр</label>
+                                            <input
+                                                list="coll-genre-options"
+                                                value={collPoemGenre}
+                                                onChange={(e) => setCollPoemGenre(e.target.value)}
+                                                placeholder="Без рубрики"
+                                            />
+                                            <datalist id="coll-genre-options">
+                                                <option value="Пейзажная лирика" />
+                                                <option value="Любовная лирика" />
+                                                <option value="Философская лирика" />
+                                                <option value="Гражданская лирика" />
+                                                <option value="Духовная лирика" />
+                                                <option value="Интимная лирика" />
+                                            </datalist>
+                                        </div>
+                                        <div style={{ display: "flex", gap: "1rem" }}>
+                                            <div className="field" style={{ flex: 1 }}>
+                                                <label>Дата написания</label>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={collPoemWrittenAt}
+                                                    onChange={(e) => setCollPoemWrittenAt(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="field" style={{ flex: 1 }}>
+                                                <label>Дата публикации</label>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={collPoemPublishedAt}
+                                                    onChange={(e) => setCollPoemPublishedAt(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                                            <button type="submit" className="btn btn-primary" disabled={collPoemSaving}>
+                                                {collPoemSaving ? "Сохраняем..." : "Создать и добавить в сборник"}
+                                            </button>
+                                            <button type="button" className="btn" onClick={() => setShowNewPoemInColl(false)}>
+                                                Отмена
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
-                                <div className="field">
-                                    <label>Описание</label>
-                                    <textarea
-                                        value={collDesc}
-                                        onChange={(e) => setCollDesc(e.target.value)}
-                                        placeholder="Краткое описание..."
-                                    />
-                                </div>
-                                <div style={{ display: "flex", gap: "0.75rem" }}>
-                                    <button type="submit" className="btn btn-primary">Создать</button>
-                                    <button type="button" className="btn" onClick={() => setShowCollForm(false)}>
-                                        Отмена
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                            {!showCollForm && (
+                                <div style={{ marginBottom: "1.5rem" }}>
+                                    <button className="btn btn-primary" onClick={() => setShowCollForm(true)}>
+                                        + Создать сборник
                                     </button>
                                 </div>
-                            </form>
-                        </div>
-                    )}
+                            )}
 
-                    {collections.length === 0 ? (
-                        <p className="empty">Сборников пока нет</p>
+                            {showCollForm && (
+                                <div className="card" style={{ cursor: "default", marginBottom: "2rem" }}>
+                                    <h3 style={{ fontFamily: "Georgia, serif", fontWeight: "normal", marginBottom: "1.25rem" }}>
+                                        Новый сборник
+                                    </h3>
+                                    <form onSubmit={saveCollection}>
+                                        <div className="field">
+                                            <label>Название</label>
+                                            <input
+                                                value={collTitle}
+                                                onChange={(e) => setCollTitle(e.target.value)}
+                                                placeholder="Название сборника"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="field">
+                                            <label>Описание</label>
+                                            <textarea
+                                                value={collDesc}
+                                                onChange={(e) => setCollDesc(e.target.value)}
+                                                placeholder="Краткое описание..."
+                                            />
+                                        </div>
+                                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                                            <button type="submit" className="btn btn-primary">Создать и добавить стихи</button>
+                                            <button type="button" className="btn" onClick={() => setShowCollForm(false)}>
+                                                Отмена
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+
+                            {collections.length === 0 ? (
+                                <p className="empty">Сборников пока нет</p>
+                            ) : (
+                                collections.map((col) => (
+                                    <div className="admin-poem-row" key={col.id}>
+                                        <span className="admin-poem-title">{col.title}</span>
+                                        <div className="admin-poem-actions">
+                                            <button
+                                                className="btn btn-sm"
+                                                onClick={() => openManage(col)}
+                                            >
+                                                Управлять стихами
+                                            </button>
+                                            <button
+                                                className="btn btn-sm btn-danger"
+                                                onClick={() => handleDeleteColl(col.id)}
+                                            >
+                                                Удалить
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </>
+                    )}
+                </>
+            )}
+            {tab === "gallery" && (
+                <>
+                    <div className="card" style={{ cursor: "default", marginBottom: "2rem" }}>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontWeight: "normal", marginBottom: "1.25rem" }}>
+                            {editGalleryItem ? "Редактировать подпись" : "Добавить фото"}
+                        </h3>
+                        <form onSubmit={saveGalleryItem}>
+                            {!editGalleryItem && (
+                                <div className="field">
+                                    <label>Фото</label>
+                                    <input
+                                        ref={galleryFileRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => setGalleryFile(e.target.files[0])}
+                                        required
+                                        style={{ fontSize: "0.9rem" }}
+                                    />
+                                </div>
+                            )}
+                            <div className="field">
+                                <label>Подпись</label>
+                                <input
+                                    value={galleryCaption}
+                                    onChange={(e) => setGalleryCaption(e.target.value)}
+                                    placeholder="Например: с главой стихотворного клуба Москвы"
+                                />
+                            </div>
+                            <div className="field">
+                                <label>Порядок сортировки</label>
+                                <input
+                                    type="number"
+                                    value={gallerySortOrder}
+                                    onChange={(e) => setGallerySortOrder(Number(e.target.value))}
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div style={{ display: "flex", gap: "0.75rem" }}>
+                                <button type="submit" className="btn btn-primary" disabled={galleryUploading}>
+                                    {galleryUploading ? "Загружаем..." : editGalleryItem ? "Сохранить" : "Добавить"}
+                                </button>
+                                {editGalleryItem && (
+                                    <button type="button" className="btn" onClick={() => { setEditGalleryItem(null); setGalleryCaption(""); setGallerySortOrder(0); }}>
+                                        Отмена
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+                    </div>
+
+                    {galleryItems.length === 0 ? (
+                        <p className="empty">Фотографий пока нет</p>
                     ) : (
-                        collections.map((col) => (
-                            <div className="admin-poem-row" key={col.id}>
-                                <span className="admin-poem-title">{col.title}</span>
+                        galleryItems.map((item) => (
+                            <div className="admin-poem-row" key={item.id}>
+                                <img src={API_URL + item.image_url} alt={item.caption} className="gallery-thumb" />
+                                <span className="admin-poem-title">{item.caption || <em style={{ color: "var(--text-muted)" }}>Без подписи</em>}</span>
                                 <div className="admin-poem-actions">
-                                    <button
-                                        className="btn btn-sm btn-danger"
-                                        onClick={() => handleDeleteColl(col.id)}
-                                    >
+                                    <button className="btn btn-sm" onClick={() => openEditGallery(item)}>
+                                        Изменить
+                                    </button>
+                                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteGallery(item.id)}>
                                         Удалить
                                     </button>
                                 </div>

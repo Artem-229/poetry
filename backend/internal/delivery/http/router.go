@@ -16,11 +16,13 @@ func NewRouter(
 	commentUC *usecase.CommentUsecase,
 	collectionUC *usecase.CollectionUsecase,
 	siteContentUC *usecase.SiteContentUsecase,
+	galleryUC *usecase.GalleryUsecase,
 	jwtSvc *service.JWTService,
 ) *gin.Engine {
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
+	r.Static("/uploads", "./uploads")
 
 	authH := handler.NewAuthHandler(authUC)
 	poemH := handler.NewPoemHandler(poemUC)
@@ -28,6 +30,7 @@ func NewRouter(
 	commentH := handler.NewCommentHandler(commentUC)
 	collH := handler.NewCollectionHandler(collectionUC)
 	siteH := handler.NewSiteContentHandler(siteContentUC)
+	galleryH := handler.NewGalleryHandler(galleryUC)
 
 	// Auth routes
 	auth := r.Group("/auth")
@@ -44,6 +47,7 @@ func NewRouter(
 	r.GET("/poems/:id/comments", commentH.ListByPoem)
 	r.GET("/collections", collH.List)
 	r.GET("/collections/:id", collH.Get)
+	r.GET("/gallery", galleryH.List)
 
 	// Authenticated routes
 	api := r.Group("/")
@@ -74,6 +78,11 @@ func NewRouter(
 		admin.DELETE("/collections/:id", collH.Delete)
 
 		admin.PUT("/site-content", siteH.Update)
+
+		admin.POST("/gallery", galleryH.Create)
+		admin.PUT("/gallery/:id", galleryH.Update)
+		admin.DELETE("/gallery/:id", galleryH.Delete)
+		admin.POST("/upload", galleryH.Upload)
 	}
 
 	return r

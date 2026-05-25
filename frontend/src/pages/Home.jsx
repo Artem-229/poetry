@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { getSiteContent } from "../api/siteContent";
 import authorPhoto from "./photos/5231371326352727703.jpg";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
 const DEFAULTS = {
     hero_name: "",
     hero_tagline: "",
@@ -30,7 +32,11 @@ export default function Home() {
         <div className="container">
 
             <div className="hero">
-                <img className="hero-photo" src={authorPhoto} alt="Фото автора" />
+                <img
+                    className="hero-photo"
+                    src={content.hero_photo ? API_URL + content.hero_photo : authorPhoto}
+                    alt="Фото автора"
+                />
                 <div className="hero-content">
                     <h1>{content.hero_name}</h1>
                     <p className="hero-tagline">{content.hero_tagline}</p>
