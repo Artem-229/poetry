@@ -12,6 +12,7 @@ type GalleryRepository interface {
 	GetByID(ctx context.Context, id int64) (domain.GalleryItem, error)
 	Update(ctx context.Context, id int64, caption string, sortOrder int) error
 	Delete(ctx context.Context, id int64) error
+	Reorder(ctx context.Context, items []domain.GalleryReorderItem) error
 }
 
 type GalleryUsecase struct {
@@ -44,4 +45,8 @@ func (u *GalleryUsecase) Update(ctx context.Context, id int64, caption string, s
 
 func (u *GalleryUsecase) Delete(ctx context.Context, id int64) error {
 	return u.repo.Delete(ctx, id)
+}
+
+func (u *GalleryUsecase) Reorder(ctx context.Context, items []domain.GalleryReorderItem) error {
+	return u.repo.Reorder(ctx, items)
 }

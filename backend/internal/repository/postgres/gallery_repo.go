@@ -66,3 +66,18 @@ func (r *GalleryRepo) Delete(ctx context.Context, id int64) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM gallery WHERE id = $1`, id)
 	return err
 }
+
+func (r *GalleryRepo) Reorder(ctx context.Context, items []domain.GalleryReorderItem) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for _, it := range items {
+		if _, err := tx.Exec(ctx, `UPDATE gallery SET sort_order = $1 WHERE id = $2`, it.SortOrder, it.ID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}

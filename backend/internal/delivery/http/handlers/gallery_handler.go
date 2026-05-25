@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"poetry/backend/internal/domain"
 	"poetry/backend/internal/usecase"
 )
 
@@ -103,6 +104,19 @@ func (h *GalleryHandler) Update(c *gin.Context) {
 	}
 
 	if err := h.uc.Update(c.Request.Context(), id, req.Caption, req.SortOrder); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
+}
+
+func (h *GalleryHandler) Reorder(c *gin.Context) {
+	var req []domain.GalleryReorderItem
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.uc.Reorder(c.Request.Context(), req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

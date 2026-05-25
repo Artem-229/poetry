@@ -797,6 +797,42 @@ body {
     flex-shrink: 0;
 }
 
+/* ─── Admin gallery drag list ─────────────────── */
+.admin-gallery-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+    margin-bottom: 0.75rem;
+    box-shadow: var(--shadow);
+    user-select: none;
+    transition: opacity 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-gallery-row.gallery-dragging {
+    opacity: 0.35;
+}
+
+.admin-gallery-row.gallery-drag-over {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(139, 105, 20, 0.18);
+}
+
+.drag-handle {
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    cursor: grab;
+    flex-shrink: 0;
+    touch-action: none;
+    line-height: 1;
+    padding: 0.25rem;
+}
+
+.drag-handle:hover { color: var(--accent); }
+
 /* ─── Utility ────────────────────────────────── */
 .divider { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
 

@@ -4,7 +4,7 @@ import { useAuthStore } from "../store/authStore";
 import { getPoems, createPoem, updatePoem, deletePoem } from "../api/poems";
 import { getCollections, getCollection, createCollection, deleteCollection, addPoemToCollection, removePoemFromCollection } from "../api/collections";
 import { getSiteContent, updateSiteContent } from "../api/siteContent";
-import { getGallery, createGalleryItem, updateGalleryItem, deleteGalleryItem, uploadFile } from "../api/gallery";
+import { getGallery, createGalleryItem, updateGalleryItem, deleteGalleryItem, uploadFile, reorderGallery } from "../api/gallery";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
@@ -59,11 +59,13 @@ export default function Admin() {
 
     const [galleryItems, setGalleryItems] = useState([]);
     const [galleryCaption, setGalleryCaption] = useState("");
-    const [gallerySortOrder, setGallerySortOrder] = useState(0);
     const [galleryFile, setGalleryFile] = useState(null);
     const [galleryUploading, setGalleryUploading] = useState(false);
     const [editGalleryItem, setEditGalleryItem] = useState(null);
     const galleryFileRef = useRef(null);
+    const [dragIndex, setDragIndex] = useState(null);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
+    const galleryListRef = useRef(null);
 
     useEffect(() => {
         if (!token || user?.role !== "ADMIN") {
@@ -248,22 +250,93 @@ export default function Admin() {
         setGalleryUploading(true);
         try {
             if (editGalleryItem) {
-                await updateGalleryItem(editGalleryItem.id, { caption: galleryCaption, sort_order: gallerySortOrder });
+                await updateGalleryItem(editGalleryItem.id, { caption: galleryCaption, sort_order: editGalleryItem.sort_order });
                 setEditGalleryItem(null);
             } else {
                 const fd = new FormData();
                 fd.append("image", galleryFile);
                 fd.append("caption", galleryCaption);
-                fd.append("sort_order", String(gallerySortOrder));
+                fd.append("sort_order", String(galleryItems.length));
                 await createGalleryItem(fd);
             }
             setGalleryCaption("");
-            setGallerySortOrder(0);
             setGalleryFile(null);
             if (galleryFileRef.current) galleryFileRef.current.value = "";
             await loadGallery();
         } catch {}
         finally { setGalleryUploading(false); }
+    };
+
+    const startDrag = (e, idx) => {
+        e.preventDefault();
+        const listEl = galleryListRef.current;
+        if (!listEl) return;
+
+        const itemEl = listEl.querySelector(`[data-gallery-idx="${idx}"]`);
+        if (!itemEl) return;
+        const rect = itemEl.getBoundingClientRect();
+
+        const clone = itemEl.cloneNode(true);
+        Object.assign(clone.style, {
+            position: "fixed",
+            left: rect.left + "px",
+            top: rect.top + "px",
+            width: rect.width + "px",
+            margin: "0",
+            zIndex: "9999",
+            opacity: "0.9",
+            boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
+            pointerEvents: "none",
+            transform: "scale(1.03)",
+            transition: "none",
+        });
+        document.body.appendChild(clone);
+
+        const state = {
+            startIdx: idx,
+            currentIdx: idx,
+            clone,
+            offsetY: e.clientY - rect.top,
+        };
+
+        setDragIndex(idx);
+
+        const onMove = (ev) => {
+            clone.style.top = (ev.clientY - state.offsetY) + "px";
+            clone.style.visibility = "hidden";
+            const elUnder = document.elementFromPoint(ev.clientX, ev.clientY);
+            clone.style.visibility = "visible";
+            const itemUnder = elUnder?.closest("[data-gallery-idx]");
+            if (itemUnder) {
+                const overIdx = parseInt(itemUnder.dataset.galleryIdx, 10);
+                if (overIdx !== state.currentIdx) {
+                    state.currentIdx = overIdx;
+                    setDragOverIndex(overIdx);
+                }
+            }
+        };
+
+        const onUp = () => {
+            document.body.removeChild(clone);
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+
+            const { startIdx, currentIdx } = state;
+            if (startIdx !== currentIdx) {
+                setGalleryItems((prev) => {
+                    const next = [...prev];
+                    const [moved] = next.splice(startIdx, 1);
+                    next.splice(currentIdx, 0, moved);
+                    reorderGallery(next.map((it, i) => ({ id: it.id, sort_order: i }))).catch(() => {});
+                    return next;
+                });
+            }
+            setDragIndex(null);
+            setDragOverIndex(null);
+        };
+
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
     };
 
     const handleDeleteGallery = async (id) => {
@@ -277,7 +350,6 @@ export default function Admin() {
     const openEditGallery = (item) => {
         setEditGalleryItem(item);
         setGalleryCaption(item.caption);
-        setGallerySortOrder(item.sort_order);
     };
 
     const saveSiteContent = async (e) => {
@@ -758,21 +830,12 @@ export default function Admin() {
                                     placeholder="Например: с главой стихотворного клуба Москвы"
                                 />
                             </div>
-                            <div className="field">
-                                <label>Порядок сортировки</label>
-                                <input
-                                    type="number"
-                                    value={gallerySortOrder}
-                                    onChange={(e) => setGallerySortOrder(Number(e.target.value))}
-                                    placeholder="0"
-                                />
-                            </div>
                             <div style={{ display: "flex", gap: "0.75rem" }}>
                                 <button type="submit" className="btn btn-primary" disabled={galleryUploading}>
                                     {galleryUploading ? "Загружаем..." : editGalleryItem ? "Сохранить" : "Добавить"}
                                 </button>
                                 {editGalleryItem && (
-                                    <button type="button" className="btn" onClick={() => { setEditGalleryItem(null); setGalleryCaption(""); setGallerySortOrder(0); }}>
+                                    <button type="button" className="btn" onClick={() => { setEditGalleryItem(null); setGalleryCaption(""); }}>
                                         Отмена
                                     </button>
                                 )}
@@ -780,23 +843,52 @@ export default function Admin() {
                         </form>
                     </div>
 
+                    {galleryItems.length > 0 && (
+                        <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+                            Зажмите и перетащите фото чтобы изменить порядок
+                        </p>
+                    )}
+
                     {galleryItems.length === 0 ? (
                         <p className="empty">Фотографий пока нет</p>
                     ) : (
-                        galleryItems.map((item) => (
-                            <div className="admin-poem-row" key={item.id}>
-                                <img src={API_URL + item.image_url} alt={item.caption} className="gallery-thumb" />
-                                <span className="admin-poem-title">{item.caption || <em style={{ color: "var(--text-muted)" }}>Без подписи</em>}</span>
-                                <div className="admin-poem-actions">
-                                    <button className="btn btn-sm" onClick={() => openEditGallery(item)}>
-                                        Изменить
-                                    </button>
-                                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteGallery(item.id)}>
-                                        Удалить
-                                    </button>
+                        <div ref={galleryListRef}>
+                            {galleryItems.map((item, idx) => (
+                                <div
+                                    key={item.id}
+                                    data-gallery-idx={idx}
+                                    className={
+                                        "admin-gallery-row" +
+                                        (dragIndex === idx ? " gallery-dragging" : "") +
+                                        (dragOverIndex === idx && dragIndex !== idx ? " gallery-drag-over" : "")
+                                    }
+                                >
+                                    <span
+                                        className="drag-handle"
+                                        onPointerDown={(e) => startDrag(e, idx)}
+                                        title="Перетащить"
+                                    >
+                                        ⠿
+                                    </span>
+                                    <img
+                                        src={API_URL + item.image_url}
+                                        alt={item.caption}
+                                        className="gallery-thumb"
+                                    />
+                                    <span className="admin-poem-title">
+                                        {item.caption || <em style={{ color: "var(--text-muted)" }}>Без подписи</em>}
+                                    </span>
+                                    <div className="admin-poem-actions">
+                                        <button className="btn btn-sm" onClick={() => openEditGallery(item)}>
+                                            Изменить
+                                        </button>
+                                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteGallery(item.id)}>
+                                            Удалить
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))
+                            ))}
+                        </div>
                     )}
                 </>
             )}

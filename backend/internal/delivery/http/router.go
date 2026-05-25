@@ -80,6 +80,7 @@ func NewRouter(
 		admin.PUT("/site-content", siteH.Update)
 
 		admin.POST("/gallery", galleryH.Create)
+		admin.PUT("/gallery/reorder", galleryH.Reorder)
 		admin.PUT("/gallery/:id", galleryH.Update)
 		admin.DELETE("/gallery/:id", galleryH.Delete)
 		admin.POST("/upload", galleryH.Upload)

@@ -9,3 +9,8 @@ type GalleryItem struct {
 	SortOrder int       `json:"sort_order"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type GalleryReorderItem struct {
+	ID        int64 `json:"id"`
+	SortOrder int   `json:"sort_order"`
+}
