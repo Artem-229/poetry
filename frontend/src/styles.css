@@ -292,6 +292,7 @@ body {
     font-size: 1.05rem;
     line-height: 1.9;
     color: var(--text);
+    white-space: pre-line;
 }
 
 .contact-block {

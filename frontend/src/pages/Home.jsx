@@ -40,7 +40,7 @@ export default function Home() {
                 <div className="hero-content">
                     <h1>{content.hero_name}</h1>
                     <p className="hero-tagline">{content.hero_tagline}</p>
-                    <p>{content.hero_description}</p>
+                    <p style={{ whiteSpace: "pre-line" }}>{content.hero_description}</p>
                 </div>
             </div>
 
@@ -70,7 +70,7 @@ export default function Home() {
                     {content.contact_email && (
                         <p>Email: <a href={`mailto:${content.contact_email}`}>{content.contact_email}</a></p>
                     )}
-                    {content.contact_note && <p>{content.contact_note}</p>}
+                    {content.contact_note && <p style={{ whiteSpace: "pre-line" }}>{content.contact_note}</p>}
                 </div>
             </div>
 
